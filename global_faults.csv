@@ -1,0 +1,34 @@
+event_id,fault_date,cables,country_region,cause,vessel_arrive,repair_start,restore_date,stated_delay_cause,backup_effective,source
+RF-01,2025-06-01,WACS,South Africa,faulty branching unit,,2025-06-01,2025-06-16,,partial,TA-2025-0717
+RF-02,2025-04-02,ACE,Liberia,landing-site construction damage,2025-04-22,2025-04-23,2025-04-30,landing site / single cable,none,TA-2025-0717
+RF-03,2025-03-04,PEACE,Red Sea / E Africa,unknown,,,,limited repair capacity,partial,TA-2025-0717
+RF-04,2025-02-28,AKORN,SE Alaska,unknown,,,2025-03-02,,emergency capacity,TA-2025-0717
+RF-05,2025-02-25,TPKM3,Taiwan-Penghu,anchor drag (Hong Tai 58),,,,,alt cables + microwave,TA-2025-0717
+RF-06,2025-02-16,TPKM2,Taiwan-Matsu,anchor drag / natural deterioration,,,2025-03-14,queued behind TPKM3,microwave,TA-2025-0717
+RF-07,2025-01-26,C-Lion1,Swedish EEZ,shunt fault,2025-03-10,2025-03-10,2025-03-14,fault confirmation lag,full,TA-2025-0717
+RF-08,2025-01-26,Sweden-Latvia,Swedish EEZ,anchor drag (Vezhen),,2025-02-19,2025-02-28,,full,TA-2025-0717
+RF-09,2025-01-22,TPKM2,Taiwan-Matsu,natural deterioration,,,,,microwave <1h,TA-2025-0717
+RF-10,2025-01-18,Quintillion,NW Alaska,sea ice,,,2025-04-14,sea ice blocks vessel to late summer,phased backup,TA-2025-0717
+RF-11,2025-01-15,TPKM3,Taiwan-Matsu,natural deterioration,,,2025-03-02,,alt cables + microwave,TA-2025-0717
+RF-12,2025-01-04,TPE,"Keelung, Taiwan",anchor drag (Shunxing 39),,,,,rerouted,TA-2025-0717
+RF-13,2024-12-26,TGN-IA,Vietnam,unknown,,,2025-02-28,,none,TA-2025-0717
+RF-14,2024-12-25,FEC-1/FEC-2/BSSC/C-Lion1,Baltic,anchor drag (Eagle S),,,2025-01-06,,full,TA-2025-0717
+RF-15,2024-12-25,Estlink-2 (power),Estonia-Finland,anchor drag (Eagle S),,2025-05-01,2025-07-15,"power cable, no rerouting",none,TA-2025-0717
+RF-16,2024-12-16,ICN1,Vanuatu,earthquake / landing station fire,,,2024-12-26,,none,TA-2025-0717
+RF-17,2024-11-29,APG,Vietnam,unknown,,,2025-05-01,concurrent AAE-1 fault,partial,TA-2025-0717
+RF-18,2024-11-17,C-Lion1/BCS,Baltic,anchor drag (Yi Peng 3),,,2024-11-28,,full,TA-2025-0717
+RF-19,2024-09-25,FALCON,Kuwait,unknown,,,2024-09-29,,partial,TA-2025-0717
+RF-20,2024-09-20,AAG,Malaysia,unknown,,,2024-09-20,,full,TA-2025-0717
+RF-21,2024-08-29,AU-SE,"Sitka, Alaska",unknown,,2024-09-08,2024-09-16,,satellite+microwave,TA-2025-0717
+RF-22,2024-08-28,AAE-1,Pakistan,unknown,,2025-01-02,2025-01-16,,partial,TA-2025-0717
+RF-23,2024-08-26,TDCE,Tonga,earthquake,,,2024-09-07,,none,TA-2025-0717
+RF-24,2024-08-20,EASSy,South Africa,shunt fault,,,2024-08-30,delayed several days,full,TA-2025-0717
+RF-25,2024-06-29,TDCE,Tonga,earthquake / rockslide,,2024-08-16,,repair ship mechanical failure,satellite,TA-2025-0717
+RF-26,2024-06-15,TGN-IA/APG/AAE-1,Vietnam,unknown,,,,3 of 5 cables down,none,TA-2025-0717
+RF-27,2024-05-12,SEACOM/EASSy,East Africa,anchor drag,,,2024-06-03,,partial,TA-2025-0717
+RF-28,2024-04-27,BDSNi,Bahamas,yacht anchor,,,,,unstable alternate,TA-2025-0717
+RF-29,2024-04-26,SAFE,Mauritius/Reunion,unknown,,2024-04-26,2024-04-26,,same-day,TA-2025-0717
+RF-30,2024-04-23,Quintillion,N Alaska,environmental conditions,,,2024-04-23,,same-day backup,TA-2025-0717
+RF-31,2024-04-19,SeaMeWe-5,Bangladesh,unknown,,,2024-06-28,permitting timelines,SMW-4 shift,TA-2025-0717
+RF-32,2024-03-14,WACS/ACE/MainOne/SAT-3,West Africa,seismic / canyon landslide,,2024-04-06,2024-05-14,4 cables at once; estimate revised 1-2wk to 6-8wk,none,TA-2025-0717
+RF-33,2024-02-24,AAE-1/EIG/SEACOM,Red Sea,sinking vessel anchor,,2024-07-01,,permits up to 8wk; Yemeni investigation,partial,TA-2025-0717

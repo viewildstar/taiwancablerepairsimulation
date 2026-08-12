@@ -1,0 +1,38 @@
+event_id,roc_year,fault_date,date_precision,cable_id,cable_name,scope,inside_24nm,location,cause_class,cause,severity,backup_route,repair_start,restore_date,expected_repair,source
+TW-114-D1,114,2025-01,month,TM3-A,Taiwan-Matsu No.3,domestic,1,N Taiwan waters,natural,fibre degradation / natural wear,partial,TM1,,2025-03-02,,MODA-114 T4; CHT release
+TW-114-D2,114,2025-02,month,TDM2,Taiwan-Matsu No.2,domestic,1,N Taiwan waters,human,anchor drag,full,microwave 12.6Gbps,,2025-03-14,,MODA-114 T4; CNA 2025-03-14
+TW-114-D3,114,2025-02,month,TP3,Taiwan-Penghu No.3,domestic,1,S Taiwan waters,human,anchor drag,full,TP2,,,,MODA-114 T4
+TW-114-D4,114,2025-10,month,TDM2,Taiwan-Matsu No.2,domestic,1,Taiwan Strait,human,fishing / bottom trawl,partial,TM3,,,2026-11-30,MODA-114 T4; MODA-LIVE
+TW-114-I1,114,2025-01,month,TPE,Trans-Pacific Express,international,1,N Taiwan offshore,human,anchor drag,partial,other cables,,,2025-02-03,MODA-114 T5; MODA release 14990
+TW-114-I2,114,2025-09,month,FNAL,FLAG North Asia Loop,international,1,NE Taiwan waters,human,suspected external force,unknown,ring config,,,,MODA-114 T5
+TW-114-I3,114,2025-09,month,RNAL,REACH North Asia Loop,international,1,NE Taiwan waters,human,suspected external force,unknown,ring config,,,,MODA-114 T5
+TW-114-O1,114,2025-01,month,FNAL,FNAL,international,0,NE Taiwan far sea,natural,earthquake,unknown,,,,,MODA-114 T6
+TW-114-O2,114,2025-01,month,RNAL,RNAL,international,0,NE Taiwan far sea,natural,earthquake,unknown,,,,,MODA-114 T6
+TW-114-O3,114,2025-01,month,TPE,TPE,international,0,N Taiwan far sea,human,suspected external force,unknown,,,,,MODA-114 T6
+TW-114-O4,114,2025-01,month,EAC1,EAC1,international,0,N Taiwan far sea,natural,earthquake,unknown,,,,,MODA-114 T6
+TW-114-O5,114,2025-03,month,EAC2,EAC2,international,0,N Taiwan far sea,natural,earthquake,unknown,,,,,MODA-114 T6
+TW-114-O6,114,2025-04,month,APCN2,APCN2,international,0,N Taiwan far sea,human,fishing,unknown,,,,,MODA-114 T6
+TW-114-O7,114,2025-07,month,C2C,C2C,international,0,S Taiwan far sea,natural,earthquake,unknown,,,,,MODA-114 T6
+TW-114-O8,114,2025-08,month,EAC1,EAC1,international,0,N Taiwan waters,other,under investigation,unknown,,,,,MODA-114 T6
+TW-114-O9,114,2025-10,month,APG,APG,international,0,East China Sea,human,suspected external force,unknown,,,,,MODA-114 T6
+TW-114-O10,114,2025-10,month,TSE-1,TSE-1,international,0,N Taiwan waters,other,under investigation,unknown,,,,,MODA-114 T6
+TW-114-O11,114,2025-11,month,APCN2,APCN2,international,0,N Taiwan waters,human,planned works,unknown,,,,,MODA-114 T6
+TW-114-O12,114,2025-11,month,SJC2,SJC2,international,0,Singapore-Malaysia area,human,planned works,unknown,,,,,MODA-114 T6
+TW-114-O13,114,2025-11,month,APG,APG,international,0,East China Sea,natural,amplifier failure,unknown,,,,,MODA-114 T6
+TW-114-O14,114,2025-11,month,APG,APG,international,0,South China Sea,human,planned works,unknown,,,,,MODA-114 T6
+TW-114-O15,114,2025-12,month,TPE,TPE,international,0,NE Asia area,human,fishing,unknown,,,,,MODA-114 T6
+TW-114-O16,114,2025-12,month,APG,APG,international,0,Singapore-Malaysia area,human,fishing,unknown,,,,,MODA-114 T6
+TW-114-O17,114,2025-12,month,NCP,NCP,international,0,East China Sea,human,planned works,unknown,,,,,MODA-114 T6
+TW-114-O18,114,2025-12,month,TPE,TPE,international,0,East China Sea,human,fishing,unknown,,,,,MODA-114 T6
+TW-114-O19,114,2025-12,month,APCN2,APCN2,international,0,East China Sea,human,fishing,unknown,,,,,MODA-114 T6
+TW-114-O20,114,2025-12,month,SJC2,SJC2,international,0,W Pacific far sea,natural,earthquake,unknown,,,,,MODA-114 T6; Dec-2025 landslide cluster (items 20-25)
+TW-114-O21,114,2025-12,month,PLCN,PLCN,international,0,NE Taiwan waters,natural,earthquake,unknown,,,,,MODA-114 T6; Dec-2025 landslide cluster (items 20-25)
+TW-114-O22,114,2025-12,month,EAC1,EAC1,international,0,N Taiwan far sea,natural,earthquake,unknown,,,,,MODA-114 T6; Dec-2025 landslide cluster (items 20-25)
+TW-114-O23,114,2025-12,month,FNAL,FNAL,international,0,NE Taiwan waters,natural,earthquake,unknown,,,,,MODA-114 T6; Dec-2025 landslide cluster (items 20-25)
+TW-114-O24,114,2025-12,month,RNAL,RNAL,international,0,NE Taiwan waters,natural,earthquake,unknown,,,,,MODA-114 T6; Dec-2025 landslide cluster (items 20-25)
+TW-114-O25,114,2025-12,month,EAC2,EAC2,international,0,N Taiwan waters,natural,earthquake,unknown,,,,,MODA-114 T6; Dec-2025 landslide cluster (items 20-25)
+TW-LIVE-1,,2025-10-07,day,TDM2,TDM2,domestic,1,~180km from Tamsui Salun,,,partial,TM3,,,2026-11-30,MODA-LIVE 2026-08-11
+TW-LIVE-2,,2026-07-26,day,TDM2,TDM2,domestic,1,~15.13km from E Matsu,,,partial,TM3,,,2026-10-26,MODA-LIVE 2026-08-11
+TW-LIVE-3,,2026-05-20,day,APG,APG,international,1,"~65km from Kuantan, Malaysia",,,unknown,"APCN-2, SJC2",,,2026-09-18,MODA-LIVE 2026-08-11
+TW-LIVE-4,,2026-06-05,day,TM3,TM3,domestic,1,~0.6km from Matsu Nangan,,,partial,TM1,,,2026-12-30,MODA-LIVE 2026-08-11
+TW-LIVE-5,,2026-07-14,day,SJC2,SJC2,international,1,"~27km, full break",,,full,"APCN-2, APG",,,2026-09-30,MODA-LIVE 2026-08-11
