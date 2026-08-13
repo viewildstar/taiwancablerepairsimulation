@@ -8,6 +8,21 @@ submarine cable outage *duration* is not a physical constant but the output of
 a rationing mechanism — and that treating it as exogenous biases the existing
 empirical literature in a predictable direction.
 
+## Try it
+
+**[Open the chart simulator](https://viewildstar.github.io/taiwancablerepairsimulation/)** —
+click any cable off Taiwan to break it, then watch where the time goes. Every completed
+repair stacks a bar: waiting for a ship, sailing to the fault, working on site.
+
+The control worth playing with is **"other countries' faults compete."** Switch it off and
+waiting collapses from a third of restoration time to about 1%. Taiwan's hulls are shared
+across the whole maintenance region, so most of a Taiwanese cable's downtime is spent behind
+a fault off Japan or Vietnam. Switch it back on and drag the fleet slider from 4 ships to 3:
+median restoration goes from roughly 25 days to 164, and 83% of it is queueing.
+
+`index.html` is a single file with no build step — vanilla JS, no dependencies. Serve it
+anywhere, or enable GitHub Pages on the default branch.
+
 ## The claim
 
 When a cable breaks, restoration time decomposes as

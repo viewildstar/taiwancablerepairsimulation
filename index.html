@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Taiwan cable repair — dispatch simulator</title>
+<meta name="description" content="Break a submarine cable off Taiwan and watch how long it takes to fix. Restoration time is mostly queueing for a ship, not repairing a cable.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* admiralty chart palette */
+  --abyss:#08191F;      /* deep water, page ground */
+  --deep:#0B2027;
+  --shelf:#12363F;      /* <200m shelf: where 71% of faults happen */
+  --shelf-line:#1B4C56;
+  --land:#DCD2B6;       /* chart buff landmass */
+  --land-edge:#A8996F;
+  --cable:#7FB2A6;      /* copper verdigris */
+  --cable-dim:#42665F;
+  --hazard:#CF5140;     /* chart hazard red */
+  --hazard-dim:#7A3229;
+  --brass:#E0A458;      /* vessels, instruments */
+  --ink:#DCE8E6;
+  --ink-mute:#7E9A9B;
+  --rule:#1E3B42;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--abyss);
+  color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;
+  font-size:14px;
+  -webkit-font-smoothing:antialiased;
+}
+.eyebrow{
+  font-family:"Barlow Condensed",sans-serif;
+  text-transform:uppercase;
+  letter-spacing:.16em;
+  font-weight:600;
+  font-size:11px;
+  color:var(--ink-mute);
+}
+h1{
+  font-family:"Barlow Condensed",sans-serif;
+  font-weight:600;
+  font-size:clamp(26px,3.4vw,40px);
+  letter-spacing:.005em;
+  margin:2px 0 6px;
+  line-height:1.02;
+}
+.thesis{
+  font-family:"IBM Plex Sans",sans-serif;
+  color:var(--ink-mute);
+  max-width:58ch;
+  line-height:1.5;
+  margin:0;
+}
+.thesis b{color:var(--ink);font-weight:500}
+
+/* ---------- shell ---------- */
+.wrap{max-width:1440px;margin:0 auto;padding:26px 22px 60px}
+header{border-bottom:1px solid var(--rule);padding-bottom:18px;margin-bottom:18px}
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 348px;gap:20px;align-items:start}
+@media (max-width:1080px){.stage{grid-template-columns:1fr}}
+
+/* ---------- chart ---------- */
+.chart{
+  position:relative;
+  background:var(--deep);
+  border:1px solid var(--rule);
+  border-radius:2px;
+  overflow:hidden;
+}
+svg.map{display:block;width:100%;height:auto;touch-action:manipulation}
+.cable{cursor:pointer;transition:stroke-width .12s ease}
+.cable:focus-visible{outline:none}
+.cable-hit{cursor:pointer;stroke:transparent;stroke-width:16}
+.cable-hit:focus-visible{stroke:var(--brass);stroke-width:3;stroke-dasharray:3 3}
+.label{
+  font-family:"Barlow Condensed",sans-serif;
+  font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  fill:var(--ink-mute);pointer-events:none;user-select:none;
+}
+.label.land{fill:#6E6247;letter-spacing:.18em}
+.depth-note{font-family:"IBM Plex Mono",monospace;font-size:8.5px;fill:#2E5B63;letter-spacing:.08em;pointer-events:none}
+
+/* legend + clock overlay */
+.overlay{
+  position:absolute;left:14px;top:12px;
+  display:flex;gap:16px;align-items:baseline;pointer-events:none;
+}
+.clock{font-family:"IBM Plex Mono",monospace;font-size:19px;font-weight:500;letter-spacing:.02em}
+.clock small{display:block;font-size:9.5px;letter-spacing:.16em;color:var(--ink-mute);font-family:"Barlow Condensed",sans-serif;text-transform:uppercase}
+.zoneflash{
+  position:absolute;right:14px;top:12px;text-align:right;pointer-events:none;
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--brass);
+  opacity:0;transition:opacity .5s ease;max-width:210px;line-height:1.35;
+}
+.zoneflash.on{opacity:.92}
+.hint{
+  position:absolute;left:14px;bottom:12px;pointer-events:none;
+  font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.14em;
+  font-size:10.5px;color:var(--ink-mute);
+}
+
+/* tooltip */
+.tip{
+  position:absolute;pointer-events:none;opacity:0;transform:translate(-50%,-115%);
+  background:#061418;border:1px solid var(--shelf-line);padding:7px 9px;
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:1.45;
+  white-space:nowrap;transition:opacity .12s;z-index:5;
+}
+.tip.on{opacity:1}
+.tip b{color:var(--ink);font-weight:600}
+.tip .t3{color:var(--hazard)}
+.tip .t2{color:var(--cable)}
+
+/* ---------- controls ---------- */
+.controls{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(184px,1fr));
+  gap:14px 20px;margin-top:16px;padding-top:16px;border-top:1px solid var(--rule);
+}
+.ctl label{display:block;margin-bottom:6px}
+.ctl .v{font-family:"IBM Plex Mono",monospace;color:var(--brass);font-size:11px}
+input[type=range]{width:100%;accent-color:var(--brass);background:transparent}
+select{
+  width:100%;background:#061418;color:var(--ink);border:1px solid var(--rule);
+  padding:6px 7px;font-family:"IBM Plex Mono",monospace;font-size:11.5px;border-radius:2px;
+}
+.buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+button{
+  font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.13em;
+  font-size:11.5px;font-weight:600;
+  background:transparent;color:var(--ink);border:1px solid var(--shelf-line);
+  padding:8px 13px;border-radius:2px;cursor:pointer;transition:.14s;
+}
+button:hover{border-color:var(--brass);color:var(--brass)}
+button.primary{border-color:var(--hazard-dim);color:#F0A79B}
+button.primary:hover{background:var(--hazard);border-color:var(--hazard);color:#0B2027}
+button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.switch{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.switch input{accent-color:var(--brass);width:15px;height:15px}
+
+/* ---------- side rail ---------- */
+.rail{display:flex;flex-direction:column;gap:16px}
+.card{background:var(--deep);border:1px solid var(--rule);border-radius:2px;padding:14px}
+.card h2{font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.16em;
+  font-size:11px;font-weight:600;color:var(--ink-mute);margin:0 0 11px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:11px 12px}
+.stat .n{font-family:"IBM Plex Mono",monospace;font-size:21px;font-weight:500;line-height:1}
+.stat .k{font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.11em;
+  font-size:9.5px;color:var(--ink-mute);margin-top:4px}
+.stat .n.red{color:var(--hazard)}
+.stat .n.brass{color:var(--brass)}
+.stat .n.green{color:var(--cable)}
+
+/* work-order bars: the signature element */
+.orders{max-height:322px;overflow-y:auto;margin:-2px -4px 0;padding:2px 4px}
+.orders::-webkit-scrollbar{width:5px}
+.orders::-webkit-scrollbar-thumb{background:var(--rule)}
+.order{margin-bottom:11px;animation:slidein .32s ease}
+@keyframes slidein{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+.order .hd{display:flex;justify-content:space-between;align-items:baseline;
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;margin-bottom:4px}
+.order .hd .nm{color:var(--ink)}
+.order .hd .tot{color:var(--ink-mute)}
+.order .bar{display:flex;height:9px;background:#061418;border:1px solid #0F2A31}
+.order .bar i{display:block;height:100%}
+.order .bar .w{background:var(--hazard);opacity:.82}
+.order .bar .t{background:var(--brass);opacity:.72}
+.order .bar .s{background:var(--cable);opacity:.78}
+.order .mt{font-family:"IBM Plex Mono",monospace;font-size:9px;color:var(--ink-mute);margin-top:3px}
+.keyrow{display:flex;gap:13px;font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;
+  letter-spacing:.11em;font-size:9.5px;color:var(--ink-mute);margin-bottom:11px}
+.keyrow i{display:inline-block;width:9px;height:9px;margin-right:5px;vertical-align:-1px}
+.empty{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-mute);line-height:1.5}
+
+/* ship roster */
+.ships{display:flex;flex-direction:column;gap:7px}
+.ship{display:flex;align-items:center;gap:9px;font-family:"IBM Plex Mono",monospace;font-size:10.5px}
+.ship .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.ship .nm{color:var(--ink);min-width:44px}
+.ship .st{color:var(--ink-mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--rule);
+  color:var(--ink-mute);font-size:12px;line-height:1.65;max-width:80ch}
+footer a{color:var(--cable)}
+footer code{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--brass)}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Taiwan Strait &middot; repair dispatch model</div>
+  <h1>Breaking a cable is instant. Fixing one is a place in a queue.</h1>
+  <p class="thesis">Taiwan owns no cable repair ship. Every break waits for a vessel shared across the
+  whole maintenance region — competing with faults off Japan, Vietnam and the Philippines.
+  <b>Click any cable to break it</b> and watch where the time actually goes.</p>
+</header>
+
+<div class="stage">
+
+  <!-- ============ CHART ============ -->
+  <div>
+    <div class="chart" id="chart">
+      <svg class="map" id="map" viewBox="0 0 1000 700" role="img"
+           aria-label="Chart of submarine cables around Taiwan. Cables are interactive.">
+        <defs>
+          <pattern id="hatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#16414A" stroke-width="1"/>
+          </pattern>
+          <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="3.4" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        <rect width="1000" height="700" fill="var(--deep)"/>
+        <g id="shelf"></g>
+        <g id="graticule"></g>
+        <g id="land"></g>
+        <g id="cables"></g>
+        <g id="hits"></g>
+        <g id="faults"></g>
+        <g id="vessels"></g>
+        <g id="mapLabels"></g>
+      </svg>
+
+      <div class="overlay">
+        <div class="clock"><small>Chart date</small><span id="clock">1 Jan 2026</span></div>
+      </div>
+      <div class="zoneflash" id="zoneflash"></div>
+      <div class="hint" id="hint">Click a cable to break it</div>
+      <div class="tip" id="tip"></div>
+    </div>
+
+    <div class="controls">
+      <div class="ctl">
+        <label>Repair ships in the region <span class="v" id="vShips">4</span></label>
+        <input type="range" id="ships" min="3" max="8" step="1" value="4">
+      </div>
+      <div class="ctl">
+        <label>Scheduled work per ship <span class="v" id="vPlan">0 jobs/yr</span></label>
+        <input type="range" id="plan" min="0" max="3" step="0.5" value="0">
+      </div>
+      <div class="ctl">
+        <label>Who goes first</label>
+        <select id="rule">
+          <option value="priority">Contract seniority</option>
+          <option value="fifo">First come, first served</option>
+          <option value="severity">Worst break first</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label>Clock speed <span class="v" id="vSpeed">6 days/sec</span></label>
+        <input type="range" id="speed" min="1" max="40" step="1" value="6">
+      </div>
+      <div class="ctl" style="align-self:end">
+        <label class="switch"><input type="checkbox" id="zone" checked>
+          <span>Other countries' faults compete</span></label>
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button class="primary" id="bRandom">Break a random cable</button>
+      <button id="bQuake">Dec 2025 landslide &mdash; six cables at once</button>
+      <button id="bPause">Pause</button>
+      <button id="bReset">Reset</button>
+    </div>
+  </div>
+
+  <!-- ============ RAIL ============ -->
+  <div class="rail">
+
+    <div class="card">
+      <h2>Right now</h2>
+      <div class="stats">
+        <div class="stat"><div class="n red" id="sOpen">0</div><div class="k">Cables broken</div></div>
+        <div class="stat"><div class="n brass" id="sQueue">0</div><div class="k">Waiting for a ship</div></div>
+        <div class="stat"><div class="n green" id="sIdle">4</div><div class="k">Ships idle</div></div>
+        <div class="stat"><div class="n" id="sLongest">&mdash;</div><div class="k">Longest break open</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Ships</h2>
+      <div class="ships" id="roster"></div>
+    </div>
+
+    <div class="card">
+      <h2>Completed repairs</h2>
+      <div class="keyrow">
+        <span><i style="background:var(--hazard);opacity:.82"></i>Waiting</span>
+        <span><i style="background:var(--brass);opacity:.72"></i>Sailing</span>
+        <span><i style="background:var(--cable);opacity:.78"></i>Working</span>
+      </div>
+      <div class="orders" id="orders">
+        <p class="empty" id="ordersEmpty">No repairs yet.<br>Break a cable to start the clock.</p>
+      </div>
+      <div class="stats" id="summary" style="margin-top:12px;display:none">
+        <div class="stat"><div class="n" id="sMed">&mdash;</div><div class="k">Median days to fix</div></div>
+        <div class="stat"><div class="n red" id="sWaitShare">&mdash;</div><div class="k">Of that, spent waiting</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <p>Restoration time splits into <b>waiting</b> for a vessel, <b>sailing</b> to the fault, and <b>working</b> on
+  site. Only the last two are physical. Waiting is an allocation: repair is carried out by cooperative
+  maintenance agreements that hold ships on standby and ration by contract seniority when faults
+  coincide. Taiwan's domestic island cables are shallow and short, so they are the <em>fastest to
+  repair</em> and among the slowest to be restored.</p>
+  <p>Fault locations, cable inventory and severity classes follow the Ministry of Digital Affairs
+  <em>FY114 submarine cable damage analysis</em> (March 2026, released CC0) and MODA's live fault table.
+  Parameters are calibrated, not estimated — this is an illustration of a mechanism. Model, data and
+  assumptions: <code>github.com/viewildstar/taiwancablerepairsimulation</code></p>
+</footer>
+</div>
+
+<script>
+"use strict";
+/* ==========================================================================
+   Taiwan cable repair dispatch simulator
+   Mirrors src/repairqueue/engine.py: a non-preemptive multi-server priority
+   queue over a shared standby fleet. The allocation rule is `sortKey()`.
+   ========================================================================== */
+
+const $ = id => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+const el = (t, a={}) => { const n = document.createElementNS(SVGNS,t);
+  for (const k in a) n.setAttribute(k, a[k]); return n; };
+
+/* ---------- geography (schematic, chart-style) ---------- */
+const LAND = {
+  china:  "M -20,-20 L 232,-20 C 228,60 206,104 214,150 C 222,196 196,222 186,262 C 176,304 200,338 194,382 C 188,428 152,452 140,498 C 128,546 148,590 132,640 C 120,682 96,706 60,720 L -20,720 Z",
+  taiwan: "M 646,166 C 672,178 690,214 698,258 C 706,306 702,356 692,404 C 682,452 664,492 638,512 C 616,530 596,522 588,498 C 576,464 570,424 568,382 C 566,332 574,278 590,232 C 604,190 622,158 646,166 Z",
+  matsu1: "M 316,214 l 13,-6 6,10 -9,9 -10,-3 Z",
+  matsu2: "M 338,198 l 10,-4 4,8 -8,6 -6,-4 Z",
+  matsu3: "M 306,238 l 11,-4 4,8 -9,6 -6,-4 Z",
+  kinmen: "M 236,364 l 22,-7 9,12 -13,13 -18,-6 Z",
+  penghu: "M 460,372 l 17,-6 8,11 -6,14 -16,-4 -5,-10 Z",
+  penghu2:"M 480,392 l 10,-3 4,7 -7,7 -7,-3 Z",
+  liuqiu: "M 558,486 l 12,-4 5,8 -8,8 -9,-4 Z"
+};
+const LANDMARKS = [
+  {x:96, y:300, t:"CHINA", cls:"land"},
+  {x:632, y:340, t:"TAIWAN", cls:"land"},
+  {x:326, y:186, t:"Matsu", cls:""},
+  {x:246, y:394, t:"Kinmen", cls:""},
+  {x:470, y:352, t:"Penghu", cls:""},
+  {x:540, y:508, t:"L. Liuqiu", cls:""},
+  {x:872, y:110, t:"to Japan / Korea / US", cls:""},
+  {x:846, y:604, t:"to SE Asia", cls:""},
+  {x:150, y:660, t:"to Hong Kong", cls:""}
+];
+/* landing stations */
+const LS = { tamsui:[626,186], yilan:[698,242], tainan:[576,430], fangshan:[598,500] };
+
+/* ---------- cable inventory (MODA-114 Tables 1 & 2) ---------- */
+/* tier 3 = junior claim (no priority dispatch), tier 2 = ordinary member.
+   depth in metres drives on-site work time. */
+const CABLES = [
+  // domestic — shallow shelf, short, backed up, junior in the queue
+  {id:"TM1-D", name:"Taiwan–Matsu No.1", cls:"domestic", tier:3, depth:70,  backup:"TM3",        pts:[LS.tamsui,[500,192],[330,216]]},
+  {id:"TDM2",  name:"Taiwan–Matsu No.2", cls:"domestic", tier:3, depth:70,  backup:"microwave",  pts:[LS.tamsui,[486,172],[344,200]]},
+  {id:"TM3",   name:"Taiwan–Matsu No.3", cls:"domestic", tier:3, depth:70,  backup:"TM1",        pts:[LS.tamsui,[492,214],[314,240]]},
+  {id:"TP2",   name:"Taiwan–Penghu No.2",cls:"domestic", tier:3, depth:55,  backup:"TP3",        pts:[LS.tainan,[520,410],[470,378]]},
+  {id:"TP3",   name:"Taiwan–Penghu No.3",cls:"domestic", tier:3, depth:55,  backup:"TP2",        pts:[LS.tainan,[526,426],[484,396]]},
+  {id:"TK2",   name:"Taiwan–Kinmen No.2",cls:"domestic", tier:3, depth:50,  backup:"PK1",        pts:[LS.tainan,[420,430],[258,372]]},
+  {id:"PK1",   name:"Penghu–Kinmen No.1",cls:"domestic", tier:3, depth:45,  backup:"PK3",        pts:[[464,378],[360,364],[260,368]]},
+  {id:"PK3",   name:"Penghu–Kinmen No.3",cls:"domestic", tier:3, depth:45,  backup:"PK1",        pts:[[470,388],[364,386],[262,378]]},
+  {id:"LLV1",  name:"Little Liuqiu No.1",cls:"domestic", tier:3, depth:30,  backup:"LLU2",       pts:[LS.fangshan,[580,490],[568,488]]},
+  {id:"LLU2",  name:"Little Liuqiu No.2",cls:"domestic", tier:3, depth:30,  backup:"LLV1",       pts:[[600,508],[582,502],[570,494]]},
+  // international — deeper, longer, ordinary club standing
+  {id:"TPE",     name:"Trans-Pacific Express", cls:"intl", tier:2, depth:1400, backup:"other cables", pts:[LS.tamsui,[720,150],[880,74],[1020,40]]},
+  {id:"FASTER",  name:"FASTER",                cls:"intl", tier:2, depth:2100, backup:"other cables", pts:[LS.yilan,[790,196],[930,132],[1020,104]]},
+  {id:"NCP",     name:"New Cross Pacific",     cls:"intl", tier:2, depth:2000, backup:"other cables", pts:[LS.tamsui,[738,124],[900,50],[1020,20]]},
+  {id:"APRICOT", name:"APRICOT",               cls:"intl", tier:2, depth:2300, backup:"other cables", pts:[LS.yilan,[810,240],[950,206],[1020,190]]},
+  {id:"EAC1",    name:"East Asia Crossing 1",  cls:"intl", tier:2, depth:1100, backup:"EAC2",         pts:[LS.tamsui,[706,116],[812,44],[900,-20]]},
+  {id:"FNAL",    name:"FLAG North Asia Loop",  cls:"intl", tier:2, depth:1200, backup:"RNAL",         pts:[LS.yilan,[772,168],[878,86],[970,-20]]},
+  {id:"RNAL",    name:"REACH North Asia Loop", cls:"intl", tier:2, depth:1200, backup:"FNAL",         pts:[LS.yilan,[784,180],[894,104],[1000,10]]},
+  {id:"C2C",     name:"City-to-City",          cls:"intl", tier:2, depth:1600, backup:"other cables", pts:[LS.fangshan,[660,586],[790,650],[930,700]]},
+  {id:"APG",     name:"Asia Pacific Gateway",  cls:"intl", tier:2, depth:1500, backup:"APCN2, SJC2",  pts:[LS.fangshan,[636,566],[736,660],[830,720]]},
+  {id:"SJC2",    name:"SE Asia–Japan No.2",    cls:"intl", tier:2, depth:1800, backup:"APCN2, APG",   pts:[LS.fangshan,[620,580],[690,672],[740,720]]},
+  {id:"APCN2",   name:"Asia Pacific Cable N-2",cls:"intl", tier:2, depth:1300, backup:"APG",          pts:[LS.fangshan,[652,556],[772,620],[900,668]]},
+  {id:"PLCN",    name:"Pacific Light",         cls:"intl", tier:2, depth:2200, backup:"other cables", pts:[LS.yilan,[800,266],[940,268],[1020,262]]},
+  {id:"EAC2",    name:"East Asia Crossing 2",  cls:"intl", tier:2, depth:1000, backup:"EAC1",         pts:[LS.fangshan,[600,600],[600,690],[604,720]]},
+  {id:"TSE-1",   name:"Taiwan Strait Express", cls:"intl", tier:2, depth:60,   backup:"CSCN",         pts:[[572,286],[420,268],[228,250]]},
+  {id:"CSCN",    name:"Cross-Straits Network", cls:"intl", tier:2, depth:60,   backup:"TSE-1",        pts:[[236,352],[180,392],[128,470]]}
+];
+
+/* ---------- vessels: regional depots, NOT Taiwanese assets ---------- */
+const DEPOTS = [
+  {name:"Yokohama", x:952, y:88},
+  {name:"Subic Bay", x:322, y:668},
+  {name:"Kaohsiung", x:574, y:472},
+  {name:"Singapore", x:706, y:700},
+  {name:"Yokohama", x:930, y:126},
+  {name:"Subic Bay", x:352, y:686},
+  {name:"Batam", x:660, y:712},
+  {name:"Chennai", x:60, y:560}
+];
+
+/* ---------- rest-of-zone fault sites (other countries) ---------- */
+const ZONE_SITES = [
+  {x:900, y:180, c:"Japan"}, {x:840, y:96, c:"Korea"},
+  {x:400, y:640, c:"Philippines"}, {x:300, y:560, c:"Vietnam"},
+  {x:690, y:660, c:"Malaysia"}, {x:770, y:700, c:"Singapore"},
+  {x:160, y:190, c:"Hong Kong"}, {x:950, y:330, c:"Guam"},
+  {x:250, y:640, c:"Vietnam"}, {x:880, y:250, c:"Japan"}
+];
+
+/* ---------- model parameters (see calibration.py) ---------- */
+const P = {
+  serviceMedian: 9,        // days, median on-site work
+  serviceLogSd: 0.55,
+  severityMult: 1.8,       // full break vs partial fibre damage
+  depthElast: 0.12,
+  mobiliseFixed: 1,        // spares loading; ACMA KPI is sail within 24h
+  transitPerUnit: 0.011,   // days per chart unit of distance
+  weatherLoss: 0.15,       // share of on-site days lost to sea state
+  zoneFaultsPerYear: 45,   // AustralAsia is the most fault-prone region on earth
+  plannedJobDays: 21
+};
+
+/* ==================== state ==================== */
+let S;
+function freshState(){
+  return {
+    t: 0, running: true, paused: false,
+    faults: [], nextId: 1, orders: [],
+    vessels: [], zoneFlashUntil: -1,
+    nShips: +$("ships").value,
+    plan: +$("plan").value,
+    rule: $("rule").value,
+    zoneOn: $("zone").checked
+  };
+}
+function buildVessels(n){
+  return Array.from({length:n}, (_,i) => {
+    const d = DEPOTS[i % DEPOTS.length];
+    return { id:"CS"+(i+1), home:{x:d.x,y:d.y}, homeName:d.name,
+             x:d.x, y:d.y, state:"idle", job:null, left:0, of:0,
+             from:{x:d.x,y:d.y} };
+  });
+}
+
+/* ---------- draws ---------- */
+const rnd = () => Math.random();
+function normal(){ let u=0,v=0; while(!u)u=rnd(); while(!v)v=rnd();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function serviceDays(depth, severity){
+  const sev = severity >= 1 ? P.severityMult : 1;
+  const dep = Math.pow(Math.max(depth,20)/500, P.depthElast);
+  const base = P.serviceMedian * sev * dep;
+  return Math.exp(Math.log(base) + normal()*P.serviceLogSd) / (1 - P.weatherLoss);
+}
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+/* point along a polyline at fraction f */
+function pointOn(pts, f){
+  const segs = [];
+  let total = 0;
+  for (let i=0;i<pts.length-1;i++){
+    const d = Math.hypot(pts[i+1][0]-pts[i][0], pts[i+1][1]-pts[i][1]);
+    segs.push(d); total += d;
+  }
+  let want = f*total;
+  for (let i=0;i<segs.length;i++){
+    if (want <= segs[i] || i === segs.length-1){
+      const r = segs[i] ? want/segs[i] : 0;
+      return { x: pts[i][0] + (pts[i+1][0]-pts[i][0])*r,
+               y: pts[i][1] + (pts[i+1][1]-pts[i][1])*r };
+    }
+    want -= segs[i];
+  }
+  return { x: pts[0][0], y: pts[0][1] };
+}
+
+/* ==================== the allocation rule ==================== */
+/* Lower sorts first. This function is the whole argument. */
+function sortKey(job){
+  if (S.rule === "fifo")     return [job.t0, job.id];
+  if (S.rule === "severity") return [-job.severity, job.t0, job.id];
+  return [job.tier, job.t0, job.id];          // contract seniority
+}
+function cmp(a,b){ const ka=sortKey(a), kb=sortKey(b);
+  for (let i=0;i<ka.length;i++){ if (ka[i]!==kb[i]) return ka[i]-kb[i]; } return 0; }
+
+/* ==================== events ==================== */
+function breakCable(cable, opts={}){
+  if (S.faults.some(f => f.cableId === cable.id && !f.done)) return null;
+  const f = pointOn(cable.pts, 0.18 + rnd()*0.64);
+  const severity = opts.severity ?? (rnd() < 0.45 ? 1 : 0.4);
+  const job = {
+    id: S.nextId++, kind:"fault", cableId: cable.id, name: cable.name,
+    label: cable.id, cls: cable.cls, tier: cable.tier, backup: cable.backup,
+    x: f.x, y: f.y, severity,
+    t0: S.t, tAssign: null, tStart: null, tDone: null,
+    service: serviceDays(cable.depth, severity), transit: 0,
+    done: false, country: "Taiwan", origin: opts.origin || "click"
+  };
+  S.faults.push(job);
+  return job;
+}
+function breakZoneCable(){
+  const site = ZONE_SITES[Math.floor(rnd()*ZONE_SITES.length)];
+  const severity = rnd() < 0.45 ? 1 : 0.4;
+  S.faults.push({
+    id: S.nextId++, kind:"zone", cableId:"ROZ"+S.nextId, name: site.c + " system",
+    label: site.c, cls:"zone", tier: 2, backup:"—",
+    x: site.x + (rnd()-.5)*40, y: site.y + (rnd()-.5)*40, severity,
+    t0: S.t, tAssign:null, tStart:null, tDone:null,
+    service: serviceDays(900, severity), transit: 0,
+    done: false, country: site.c, origin:"zone"
+  });
+  flashZone(site.c + " fault — a ship is taken off station");
+}
+function flashZone(msg){
+  const z = $("zoneflash"); z.textContent = msg; z.classList.add("on");
+  S.zoneFlashUntil = S.t + 25;
+}
+function plannedJob(v){
+  S.faults.push({
+    id: S.nextId++, kind:"planned", cableId:"PLANNED", name:"Scheduled work",
+    label:"Scheduled", cls:"planned", tier: 0, backup:"—",
+    x: v.home.x, y: v.home.y, severity: 0,
+    t0: S.t, tAssign:null, tStart:null, tDone:null,
+    service: P.plannedJobDays, transit: 0, done:false,
+    country:"—", origin:"planned"
+  });
+}
+
+/* ==================== the clock ==================== */
+function step(dt){
+  S.t += dt;
+
+  // rest-of-zone arrivals: this is why your cable waits
+  if (S.zoneOn){
+    const p = (P.zoneFaultsPerYear / 365) * dt;
+    if (rnd() < p) breakZoneCable();
+  }
+  // scheduled installation / maintenance bookings
+  if (S.plan > 0){
+    const p = (S.plan * S.vessels.length / 365) * dt;
+    if (rnd() < p) plannedJob(S.vessels[Math.floor(rnd()*S.vessels.length)]);
+  }
+
+  // progress busy vessels
+  for (const v of S.vessels){
+    if (v.state === "idle") continue;
+    v.left -= dt;
+    const job = v.job;
+    if (v.state === "transit"){
+      const r = Math.min(1, 1 - v.left / Math.max(v.of, 1e-6));
+      v.x = v.from.x + (job.x - v.from.x) * r;
+      v.y = v.from.y + (job.y - v.from.y) * r;
+      if (v.left <= 0){
+        v.x = job.x; v.y = job.y;
+        v.state = "working"; job.tStart = S.t;
+        v.of = job.service; v.left = job.service;
+      }
+    } else if (v.state === "working"){
+      if (v.left <= 0){
+        job.tDone = S.t; job.done = true; v.at = true;
+        if (job.kind === "fault") recordOrder(job);
+        v.job = null; v.state = "idle";
+        v.from = {x:v.x, y:v.y};
+        // A hull stays where it finished. Vessels do not deadhead back to
+        // berth between faults, and the next transit is measured from here --
+        // which is why a ship's last job shapes the next cable's wait.
+      }
+    }
+  }
+
+  // dispatch idle vessels to pending work
+  const pending = S.faults.filter(f => !f.done && f.tAssign === null);
+  pending.sort(cmp);
+  for (const job of pending){
+    const v = S.vessels.find(v => v.state === "idle");
+    if (!v) break;
+    job.tAssign = S.t;
+    const tr = dist(v, job) * P.transitPerUnit + P.mobiliseFixed;
+    job.transit = tr;
+    v.job = job; v.from = {x:v.x, y:v.y};
+    v.state = "transit"; v.of = tr; v.left = tr;
+  }
+
+  if (S.t > S.zoneFlashUntil) $("zoneflash").classList.remove("on");
+}
+
+/* ==================== work-order bars ==================== */
+function recordOrder(job){
+  const wait = job.tAssign - job.t0;
+  const total = job.tDone - job.t0;
+  S.orders.unshift({ label: job.label, name: job.name, cls: job.cls,
+    wait, transit: job.transit, service: job.service, total,
+    severity: job.severity, backup: job.backup, tier: job.tier });
+  renderOrders();
+}
+function renderOrders(){
+  const box = $("orders");
+  $("ordersEmpty").style.display = S.orders.length ? "none" : "block";
+  box.querySelectorAll(".order").forEach(n => n.remove());
+  const scale = Math.max(30, ...S.orders.slice(0,24).map(o => o.total));
+  for (const o of S.orders.slice(0,24)){
+    const d = document.createElement("div"); d.className = "order";
+    const pct = x => (x / scale * 100).toFixed(2) + "%";
+    d.innerHTML =
+      `<div class="hd"><span class="nm">${o.label}</span>` +
+      `<span class="tot">${o.total.toFixed(0)} d</span></div>` +
+      `<div class="bar"><i class="w" style="width:${pct(o.wait)}"></i>` +
+      `<i class="t" style="width:${pct(o.transit)}"></i>` +
+      `<i class="s" style="width:${pct(o.service)}"></i></div>` +
+      `<div class="mt">waited ${o.wait.toFixed(0)} d &middot; sailed ${o.transit.toFixed(1)} d ` +
+      `&middot; worked ${o.service.toFixed(0)} d &middot; ` +
+      `${(o.wait/o.total*100).toFixed(0)}% waiting</div>`;
+    box.appendChild(d);
+  }
+  if (S.orders.length){
+    $("summary").style.display = "grid";
+    const ds = S.orders.map(o => o.total).slice().sort((a,b)=>a-b);
+    const med = ds[Math.floor(ds.length/2)];
+    const ws = S.orders.reduce((s,o)=>s+o.wait,0) / S.orders.reduce((s,o)=>s+o.total,0);
+    $("sMed").textContent = med.toFixed(0);
+    $("sWaitShare").textContent = (ws*100).toFixed(0) + "%";
+  } else {
+    $("summary").style.display = "none";
+  }
+}
+
+/* ==================== render chart ==================== */
+function drawStatic(){
+  const shelf = $("shelf"), grat = $("graticule"), land = $("land"), lab = $("mapLabels");
+  [shelf,grat,land,lab].forEach(g => g.replaceChildren());
+
+  // continental shelf band (<200m) — where 71% of faults occur
+  shelf.appendChild(el("path",{
+    d:"M 214,150 C 300,180 380,210 452,250 C 520,288 556,300 566,340 C 574,392 560,440 520,470 C 460,514 380,520 300,540 C 240,556 190,590 150,640 L 150,120 Z",
+    fill:"var(--shelf)", opacity:"0.5"}));
+  shelf.appendChild(el("path",{
+    d:"M 214,150 C 300,180 380,210 452,250 C 520,288 556,300 566,340 C 574,392 560,440 520,470 C 460,514 380,520 300,540 C 240,556 190,590 150,640",
+    fill:"none", stroke:"var(--shelf-line)", "stroke-width":"1", "stroke-dasharray":"5 4"}));
+  const dn = el("text",{x:"396",y:"318",class:"depth-note"});
+  dn.textContent = "— 200 m —  SHELF: ANCHOR & TRAWL ZONE";
+  shelf.appendChild(dn);
+
+  // graticule
+  for (let x=100;x<1000;x+=100) grat.appendChild(el("line",
+    {x1:x,y1:0,x2:x,y2:700,stroke:"#0F2A31","stroke-width":"1"}));
+  for (let y=100;y<700;y+=100) grat.appendChild(el("line",
+    {x1:0,y1:y,x2:1000,y2:y,stroke:"#0F2A31","stroke-width":"1"}));
+
+  for (const k in LAND) land.appendChild(el("path",
+    {d:LAND[k], fill:"var(--land)", stroke:"#A8996F", "stroke-width":"0.8"}));
+
+  for (const m of LANDMARKS){
+    const t = el("text",{x:m.x,y:m.y,class:"label "+m.cls,"text-anchor":"middle"});
+    t.textContent = m.t; lab.appendChild(t);
+  }
+}
+
+function drawCables(){
+  const g = $("cables"), h = $("hits");
+  g.replaceChildren(); h.replaceChildren();
+  for (const c of CABLES){
+    const d = "M " + c.pts.map(p => p.join(",")).join(" L ");
+    const broken = S.faults.some(f => f.cableId === c.id && !f.done);
+    const line = el("path",{ d, class:"cable", fill:"none",
+      stroke: broken ? "var(--hazard)" : (c.cls==="domestic" ? "var(--cable)" : "var(--cable-dim)"),
+      "stroke-width": broken ? 2.4 : (c.cls==="domestic" ? 1.9 : 1.3),
+      "stroke-dasharray": broken ? "7 5" : "none",
+      "stroke-linecap":"round" });
+    if (broken) line.setAttribute("filter","url(#glow)");
+    g.appendChild(line);
+
+    const hit = el("path",{ d, class:"cable-hit", fill:"none", tabindex:"0",
+      role:"button", "aria-label":`Break ${c.name}` });
+    hit.addEventListener("click", () => { breakCable(c); redraw(); });
+    hit.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); breakCable(c); redraw(); }
+    });
+    hit.addEventListener("pointerenter", e => showTip(e, c, broken));
+    hit.addEventListener("pointermove",  e => showTip(e, c, broken));
+    hit.addEventListener("pointerleave", hideTip);
+    hit.addEventListener("focus", () => {
+      const p = pointOn(c.pts, .5);
+      showTipAt(p, c, broken);
+    });
+    hit.addEventListener("blur", hideTip);
+    h.appendChild(hit);
+  }
+}
+
+function drawDynamic(){
+  const fg = $("faults"), vg = $("vessels");
+  fg.replaceChildren(); vg.replaceChildren();
+
+  for (const f of S.faults){
+    if (f.done || f.kind === "planned") continue;
+    const col = f.kind === "zone" ? "var(--brass)" : "var(--hazard)";
+    const r = f.kind === "zone" ? 3.4 : 5;
+    const c = el("circle",{cx:f.x,cy:f.y,r,fill:"none",stroke:col,"stroke-width":"1.6"});
+    fg.appendChild(c);
+    fg.appendChild(el("line",{x1:f.x-r-3,y1:f.y,x2:f.x+r+3,y2:f.y,stroke:col,"stroke-width":"1.4"}));
+    fg.appendChild(el("line",{x1:f.x,y1:f.y-r-3,x2:f.x,y2:f.y+r+3,stroke:col,"stroke-width":"1.4"}));
+    if (f.kind === "fault"){
+      const days = Math.round(S.t - f.t0);
+      const t = el("text",{x:f.x+10,y:f.y-6,class:"label",fill:"#F0A79B"});
+      t.textContent = `${f.label} · ${days}d`;
+      fg.appendChild(t);
+    }
+  }
+
+  for (const v of S.vessels){
+    const busy = v.state !== "idle";
+    if (busy && v.job){
+      vg.appendChild(el("line",{x1:v.from.x,y1:v.from.y,x2:v.job.x,y2:v.job.y,
+        stroke:"var(--brass)","stroke-width":"0.8","stroke-dasharray":"2 5",opacity:"0.45"}));
+    }
+    // hull glyph: a small chevron pointing along travel
+    const g = el("g",{transform:`translate(${v.x},${v.y})`});
+    g.appendChild(el("path",{ d:"M 0,-5.4 L 4.2,4.4 L 0,2.4 L -4.2,4.4 Z",
+      fill: busy ? "var(--brass)" : "#5E7C7A",
+      stroke:"#061418","stroke-width":"0.6" }));
+    if (v.state === "working"){
+      g.appendChild(el("circle",{r:"9",fill:"none",stroke:"var(--cable)",
+        "stroke-width":"1","stroke-dasharray":"3 3",opacity:"0.8"}));
+    }
+    vg.appendChild(g);
+  }
+}
+
+function drawRoster(){
+  const box = $("roster"); box.replaceChildren();
+  for (const v of S.vessels){
+    const row = document.createElement("div"); row.className = "ship";
+    let col = "#5E7C7A", txt = v.at ? "idle on station" : "idle at " + v.homeName;
+    if (v.state === "transit") { col = "var(--brass)";
+      txt = `sailing to ${v.job.label} · ${v.left.toFixed(1)} d out`; }
+    if (v.state === "working") { col = "var(--cable)";
+      txt = `working ${v.job.label} · ${v.left.toFixed(0)} d left`; }
+    row.innerHTML = `<span class="dot" style="background:${col}"></span>` +
+      `<span class="nm">${v.id}</span><span class="st">${txt}</span>`;
+    box.appendChild(row);
+  }
+}
+
+const D0 = new Date(Date.UTC(2026,0,1));
+function drawStats(){
+  const open = S.faults.filter(f => !f.done && f.kind === "fault");
+  const queue = S.faults.filter(f => !f.done && f.tAssign === null);
+  $("sOpen").textContent = open.length;
+  $("sQueue").textContent = queue.length;
+  $("sIdle").textContent = S.vessels.filter(v => v.state === "idle").length;
+  const longest = open.length ? Math.max(...open.map(f => S.t - f.t0)) : null;
+  $("sLongest").textContent = longest === null ? "—" : Math.round(longest) + " d";
+  const d = new Date(D0.getTime() + S.t*86400000);
+  $("clock").textContent = d.toLocaleDateString("en-GB",
+    {day:"numeric", month:"short", year:"numeric", timeZone:"UTC"});
+}
+
+function redraw(){ drawCables(); drawDynamic(); drawRoster(); drawStats(); }
+
+/* ---------- tooltip ---------- */
+function tipHTML(c, broken){
+  const tierTxt = c.tier === 3
+    ? `<span class="t3">junior claim — no priority dispatch</span>`
+    : `<span class="t2">ordinary club standing</span>`;
+  return `<b>${c.name}</b><br>${c.cls === "domestic" ? "Domestic" : "International"} ·
+    ${c.depth} m · backup: ${c.backup}<br>${tierTxt}<br>` +
+    (broken ? `<span class="t3">already broken</span>` : `click to break`);
+}
+function showTip(e, c, broken){
+  const box = $("chart").getBoundingClientRect();
+  const tip = $("tip");
+  tip.innerHTML = tipHTML(c, broken);
+  tip.style.left = (e.clientX - box.left) + "px";
+  tip.style.top  = (e.clientY - box.top) + "px";
+  tip.classList.add("on");
+}
+function showTipAt(p, c, broken){
+  const svg = $("map"), box = $("chart").getBoundingClientRect();
+  const r = svg.getBoundingClientRect();
+  const tip = $("tip");
+  tip.innerHTML = tipHTML(c, broken);
+  tip.style.left = (r.left - box.left + p.x / 1000 * r.width) + "px";
+  tip.style.top  = (r.top - box.top + p.y / 700 * r.height) + "px";
+  tip.classList.add("on");
+}
+function hideTip(){ $("tip").classList.remove("on"); }
+
+/* ==================== loop ==================== */
+let last = performance.now();
+function frame(now){
+  const wall = Math.min(0.05, (now - last)/1000); last = now;
+  if (!S.paused){
+    const dt = wall * (+$("speed").value);
+    // sub-step so fast clocks don't skip dispatch decisions
+    const n = Math.max(1, Math.ceil(dt / 0.5));
+    for (let i=0;i<n;i++) step(dt/n);
+    redraw();
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ==================== wiring ==================== */
+function reset(){
+  S = freshState();
+  S.vessels = buildVessels(S.nShips);
+  drawStatic(); renderOrders(); redraw();
+  $("hint").textContent = "Click a cable to break it";
+}
+
+$("ships").addEventListener("input", e => {
+  $("vShips").textContent = e.target.value;
+  const n = +e.target.value;
+  S.nShips = n;
+  // keep busy hulls, add or park the difference
+  while (S.vessels.length < n){
+    const d = DEPOTS[S.vessels.length % DEPOTS.length];
+    S.vessels.push({id:"CS"+(S.vessels.length+1), home:{x:d.x,y:d.y}, homeName:d.name,
+      x:d.x, y:d.y, state:"idle", job:null, left:0, of:0, from:{x:d.x,y:d.y}});
+  }
+  while (S.vessels.length > n){
+    const i = S.vessels.map((v,j)=>[v,j]).reverse().find(([v]) => v.state==="idle");
+    if (!i) break;
+    S.vessels.splice(i[1],1);
+  }
+  redraw();
+});
+$("plan").addEventListener("input", e => {
+  S.plan = +e.target.value;
+  $("vPlan").textContent = e.target.value + " jobs/yr";
+});
+$("speed").addEventListener("input", e => {
+  $("vSpeed").textContent = e.target.value + " days/sec";
+});
+$("rule").addEventListener("change", e => { S.rule = e.target.value; });
+$("zone").addEventListener("change", e => {
+  S.zoneOn = e.target.checked;
+  $("hint").textContent = e.target.checked
+    ? "Click a cable to break it"
+    : "Regional competition off — the queue no longer binds";
+});
+$("bRandom").addEventListener("click", () => {
+  const free = CABLES.filter(c => !S.faults.some(f => f.cableId===c.id && !f.done));
+  if (!free.length) return;
+  breakCable(free[Math.floor(rnd()*free.length)]); redraw();
+});
+$("bQuake").addEventListener("click", () => {
+  // MODA-114 Table 6, items 20–25: one landslide, six international systems
+  ["SJC2","PLCN","EAC1","FNAL","RNAL","EAC2"].forEach(id => {
+    const c = CABLES.find(c => c.id === id);
+    if (c) breakCable(c, {severity:1, origin:"quake"});
+  });
+  flashZone("Submarine landslide — six systems faulted at once");
+  redraw();
+});
+$("bPause").addEventListener("click", e => {
+  S.paused = !S.paused;
+  e.target.textContent = S.paused ? "Resume" : "Pause";
+});
+$("bReset").addEventListener("click", () => {
+  reset(); $("bPause").textContent = "Pause";
+});
+
+reset();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
