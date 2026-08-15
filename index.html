@@ -60,6 +60,24 @@ h1{
 }
 .thesis b{color:var(--ink);font-weight:500}
 
+/* ---------- what the fleet actually looks like ---------- */
+.band{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);margin-bottom:10px;
+}
+.band .cell{background:var(--deep);padding:11px 13px}
+.band .n{font-family:"IBM Plex Mono",monospace;font-size:20px;font-weight:500;
+  line-height:1;color:var(--brass)}
+.band .n.warn{color:var(--hazard)}
+.band .k{font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;
+  letter-spacing:.11em;font-size:9.5px;color:var(--ink);margin-top:7px;line-height:1.3}
+.band .src{font-family:"IBM Plex Mono",monospace;font-size:8.5px;color:var(--ink-mute);
+  margin-top:5px;line-height:1.35}
+.band .src.est{color:var(--brass);opacity:.75}
+.band-note{font-size:11.5px;color:var(--ink-mute);line-height:1.55;
+  max-width:88ch;margin:0 0 18px}
+.band-note b{color:var(--ink);font-weight:500}
+
 /* ---------- shell ---------- */
 .wrap{max-width:1440px;margin:0 auto;padding:26px 22px 60px}
 header{border-bottom:1px solid var(--rule);padding-bottom:18px;margin-bottom:18px}
@@ -220,6 +238,57 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--bra
   whole maintenance region — competing with faults off Japan, Vietnam and the Philippines.
   <b>Click any cable to break it</b> and watch where the time goes.</p>
 </header>
+
+<div class="band">
+  <div class="cell">
+    <div class="n">150&ndash;200</div>
+    <div class="k">Cable faults a year, worldwide</div>
+    <div class="src">ICPC via Insikt TA-2025-0717</div>
+  </div>
+  <div class="cell">
+    <div class="n">36.3%</div>
+    <div class="k">Of all publicised faults 2015&ndash;2024 were in this region</div>
+    <div class="src">SubTel Forum / Insikt &middot; most fault-prone on earth</div>
+  </div>
+  <div class="cell">
+    <div class="n">54&ndash;73</div>
+    <div class="k">Faults a year the region's hulls must answer</div>
+    <div class="src est">derived &middot; 36.3% of the global count</div>
+  </div>
+  <div class="cell">
+    <div class="n">22 <span style="color:var(--ink-mute)">of</span> 77</div>
+    <div class="k">Cable ships built to repair, not to lay</div>
+    <div class="src">Cariolle 2026</div>
+  </div>
+  <div class="cell">
+    <div class="n">~4</div>
+    <div class="k">Repair hulls this zone can call on</div>
+    <div class="src est">model assumption &mdash; not observed</div>
+  </div>
+  <div class="cell">
+    <div class="n">14&ndash;18</div>
+    <div class="k">Faults per repair hull per year</div>
+    <div class="src est">derived &middot; region faults &divide; hulls</div>
+  </div>
+  <div class="cell">
+    <div class="n">40 d</div>
+    <div class="k">Mean restoration time in 2023, rising since 2015</div>
+    <div class="src">SubTel Forum</div>
+  </div>
+  <div class="cell">
+    <div class="n warn">0</div>
+    <div class="k">Cable ships owned by Taiwan</div>
+    <div class="src">MODA-114</div>
+  </div>
+</div>
+
+<p class="band-note">Tiles whose <b>source line is in brass</b> are derived or assumed, not measured.
+The global fault count, the regional share, the repair-capable share of the world fleet and the
+40-day mean are published. <b>How many repair hulls a given maintenance zone holds on standby is
+not disclosed by anyone</b> — club membership and priority position are commercially confidential,
+which is itself one of the findings. The zone fleet here is calibrated so that server utilisation
+lands between 0.70 and 0.85; everything downstream of it, including faults per hull per year,
+inherits that assumption.</p>
 
 <div class="stage">
 
@@ -557,6 +626,97 @@ function sliceLine(pts, f0, f1){
   return out;
 }
 
+/* ---------- keeping hulls in the water ----------
+   Cable ships sail round islands, not over them. Land is approximated for
+   routing only: Taiwan as an ellipse, the Chinese coast as a depth-sounding
+   style list of (y, x) samples off the LAND.china path. */
+const TW_ISLAND = { cx:636, cy:344, rx:70, ry:186 };
+const CN_COAST = [[-20,232],[60,228],[104,206],[150,214],[196,222],[222,196],
+                  [262,186],[338,200],[382,194],[428,188],[452,152],[498,140],
+                  [546,128],[590,148],[640,132],[682,120],[720,60]];
+const CLEARANCE = 10;          // chart units a hull keeps off the beach
+/* open-water turning points: round the capes, or stand further offshore */
+const SEA_LANES = [
+  {x:636, y:126}, {x:636, y:562}, {x:772, y:126},
+  {x:772, y:562}, {x:300, y:300}, {x:300, y:620}
+];
+
+function coastX(y){
+  const c = CN_COAST;
+  if (y <= c[0][0]) return c[0][1];
+  if (y >= c[c.length-1][0]) return c[c.length-1][1];
+  for (let i=0;i<c.length-1;i++){
+    if (y >= c[i][0] && y <= c[i+1][0]){
+      const r = (y - c[i][0]) / (c[i+1][0] - c[i][0]);
+      return c[i][1] + (c[i+1][1] - c[i][1]) * r;
+    }
+  }
+  return c[c.length-1][1];
+}
+function onLand(x, y){
+  if (x < coastX(y) + CLEARANCE) return true;                        // mainland
+  const dx = (x - TW_ISLAND.cx) / (TW_ISLAND.rx + CLEARANCE);
+  const dy = (y - TW_ISLAND.cy) / (TW_ISLAND.ry + CLEARANCE);
+  return dx*dx + dy*dy < 1;                                          // Taiwan
+}
+function crossesLand(a, b, steps = 48){
+  for (let i=1;i<steps;i++){
+    const r = i/steps;
+    if (onLand(a.x + (b.x-a.x)*r, a.y + (b.y-a.y)*r)) return true;
+  }
+  return false;
+}
+/* Nearest wet point to one that is ashore: step east off the mainland, or
+   push radially out of the island. */
+function nearestWater(p){
+  let q = { x:p.x, y:p.y };
+  if (q.x < coastX(q.y) + CLEARANCE) q = { x: coastX(q.y) + CLEARANCE + 2, y: q.y };
+  const dx = (q.x - TW_ISLAND.cx) / (TW_ISLAND.rx + CLEARANCE);
+  const dy = (q.y - TW_ISLAND.cy) / (TW_ISLAND.ry + CLEARANCE);
+  const r = Math.hypot(dx, dy);
+  if (r < 1){
+    const k = r < 1e-6 ? 1 : 1.02 / r;
+    q = { x: TW_ISLAND.cx + (q.x - TW_ISLAND.cx) * k,
+          y: TW_ISLAND.cy + (q.y - TW_ISLAND.cy) * k };
+  }
+  return q;
+}
+
+/* Shortest chain of turning points from a to b that stays wet. */
+function wetRoute(A, B){
+  const direct = [[A.x,A.y],[B.x,B.y]];
+  if (!crossesLand(A,B)) return direct;
+
+  let best = null;
+  for (const w of SEA_LANES){
+    if (crossesLand(A,w) || crossesLand(w,B)) continue;
+    const d = Math.hypot(A.x-w.x,A.y-w.y) + Math.hypot(w.x-B.x,w.y-B.y);
+    if (!best || d < best.d) best = { d, pts:[[A.x,A.y],[w.x,w.y],[B.x,B.y]] };
+  }
+  if (best) return best.pts;
+
+  for (const w1 of SEA_LANES) for (const w2 of SEA_LANES){
+    if (w1 === w2 || crossesLand(A,w1) || crossesLand(w1,w2) || crossesLand(w2,B)) continue;
+    const d = Math.hypot(A.x-w1.x,A.y-w1.y) + Math.hypot(w1.x-w2.x,w1.y-w2.y)
+            + Math.hypot(w2.x-B.x,w2.y-B.y);
+    if (!best || d < best.d)
+      best = { d, pts:[[A.x,A.y],[w1.x,w1.y],[w2.x,w2.y],[B.x,B.y]] };
+  }
+  return best ? best.pts : direct;
+}
+
+/* Cables come ashore, so a fault can legitimately sit on the beach. Round the
+   islands to a sea approach point first, then run the last short leg in. */
+function seaRoute(a, b){
+  const A0 = { x:a.x, y:a.y }, B0 = { x:b.x, y:b.y };
+  const aWet = !onLand(A0.x, A0.y), bWet = !onLand(B0.x, B0.y);
+  const A = aWet ? A0 : nearestWater(A0);
+  const B = bWet ? B0 : nearestWater(B0);
+  return [ ...(aWet ? [] : [[A0.x, A0.y]]),
+           ...wetRoute(A, B),
+           ...(bWet ? [] : [[B0.x, B0.y]]) ];
+}
+
 /* ==================== the allocation rule ==================== */
 /* Lower sorts first. This function is the whole argument. */
 function sortKey(job){
@@ -634,8 +794,8 @@ function step(dt){
     const job = v.job;
     if (v.state === "transit"){
       const r = Math.min(1, 1 - v.left / Math.max(v.of, 1e-6));
-      v.x = v.from.x + (job.x - v.from.x) * r;
-      v.y = v.from.y + (job.y - v.from.y) * r;
+      const p = pointOn(v.route || [[v.from.x,v.from.y],[job.x,job.y]], r);
+      v.x = p.x; v.y = p.y;
       if (v.left <= 0){
         v.x = job.x; v.y = job.y;
         v.state = "working"; job.tStart = S.t;
@@ -661,9 +821,11 @@ function step(dt){
     const v = S.vessels.find(v => v.state === "idle");
     if (!v) break;
     job.tAssign = S.t;
-    const tr = dist(v, job) * P.transitPerUnit + P.mobiliseFixed;
+    // distance sailed is the routed track round the islands, not the crow-fly
+    const route = seaRoute(v, job);
+    const tr = polyLen(route) * P.transitPerUnit + P.mobiliseFixed;
     job.transit = tr;
-    v.job = job; v.from = {x:v.x, y:v.y};
+    v.job = job; v.from = {x:v.x, y:v.y}; v.route = route;
     v.state = "transit"; v.of = tr; v.left = tr;
   }
 
@@ -900,8 +1062,10 @@ function drawDynamic(){
   for (const v of S.vessels){
     const busy = v.state !== "idle";
     if (busy && v.job){
-      vg.appendChild(el("line",{x1:v.from.x,y1:v.from.y,x2:v.job.x,y2:v.job.y,
-        stroke:"var(--brass)","stroke-width":"0.8","stroke-dasharray":"2 5",opacity:"0.45"}));
+      const track = v.route || [[v.from.x,v.from.y],[v.job.x,v.job.y]];
+      vg.appendChild(el("path",{ d:"M " + track.map(p => p.join(",")).join(" L "),
+        fill:"none", stroke:"var(--brass)","stroke-width":"0.8",
+        "stroke-dasharray":"2 5", opacity:"0.45" }));
     }
     // hull glyph: a small chevron pointing along travel
     const g = el("g",{transform:`translate(${v.x},${v.y})`});
