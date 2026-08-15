@@ -200,10 +200,10 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--bra
 
 <header>
   <div class="eyebrow">Taiwan Strait &middot; repair dispatch model</div>
-  <h1>Breaking a cable is instant. Fixing one is a place in a queue.</h1>
-  <p class="thesis">Taiwan owns no cable repair ship. Every break waits for a vessel shared across the
+  <h1>Cable maintenance is complicated.</h1>
+  <p class="thesis">Taiwan owns no cable repair ship. A break waits for a vessel shared across the
   whole maintenance region — competing with faults off Japan, Vietnam and the Philippines.
-  <b>Click any cable to break it</b> and watch where the time actually goes.</p>
+  <b>Click any cable to break it</b> and watch where the time goes.</p>
 </header>
 
 <div class="stage">
@@ -487,6 +487,36 @@ function pointOn(pts, f){
   return { x: pts[0][0], y: pts[0][1] };
 }
 
+/* length of a polyline, and the sub-polyline between two fractions of it.
+   `sliceLine` is what severs a cable: the two surviving stubs are the slices
+   either side of the fault, with a gap opened between them. */
+function polyLen(pts){
+  let t = 0;
+  for (let i=0;i<pts.length-1;i++) t += Math.hypot(pts[i+1][0]-pts[i][0], pts[i+1][1]-pts[i][1]);
+  return t;
+}
+function sliceLine(pts, f0, f1){
+  const total = polyLen(pts);
+  if (!(total > 0) || f1 <= f0) return [];
+  const d0 = f0*total, d1 = f1*total;
+  const out = [];
+  let acc = 0;
+  for (let i=0;i<pts.length-1;i++){
+    const ax=pts[i][0], ay=pts[i][1], bx=pts[i+1][0], by=pts[i+1][1];
+    const seg = Math.hypot(bx-ax, by-ay);
+    if (seg <= 0) continue;
+    const s0 = acc, s1 = acc + seg;
+    if (s1 >= d0 && s0 <= d1){
+      const at = r => [ax + (bx-ax)*r, ay + (by-ay)*r];
+      const lo = Math.max(d0, s0), hi = Math.min(d1, s1);
+      if (!out.length) out.push(at((lo - s0)/seg));
+      out.push(at((hi - s0)/seg));
+    }
+    acc = s1;
+  }
+  return out;
+}
+
 /* ==================== the allocation rule ==================== */
 /* Lower sorts first. This function is the whole argument. */
 function sortKey(job){
@@ -500,12 +530,13 @@ function cmp(a,b){ const ka=sortKey(a), kb=sortKey(b);
 /* ==================== events ==================== */
 function breakCable(cable, opts={}){
   if (S.faults.some(f => f.cableId === cable.id && !f.done)) return null;
-  const f = pointOn(cable.pts, 0.18 + rnd()*0.64);
+  const frac = 0.18 + rnd()*0.64;
+  const f = pointOn(cable.pts, frac);
   const severity = opts.severity ?? (rnd() < 0.45 ? 1 : 0.4);
   const job = {
     id: S.nextId++, kind:"fault", cableId: cable.id, name: cable.name,
     label: cable.id, cls: cable.cls, tier: cable.tier, backup: cable.backup,
-    x: f.x, y: f.y, severity,
+    x: f.x, y: f.y, frac, severity,
     t0: S.t, tAssign: null, tStart: null, tDone: null,
     service: serviceDays(cable.depth, severity), transit: 0,
     done: false, country: "Taiwan", origin: opts.origin || "click"
@@ -670,19 +701,72 @@ function drawStatic(){
   }
 }
 
+/* a severed end: two short filaments splaying out of the break */
+function frayEnd(g, p, dx, dy){
+  const L = Math.hypot(dx, dy) || 1;
+  dx /= L; dy /= L;
+  for (const a of [0.45, -0.45]){
+    const ca = Math.cos(a), sa = Math.sin(a);
+    g.appendChild(el("line",{
+      x1:p[0], y1:p[1],
+      x2:p[0] + (dx*ca - dy*sa)*5.5,
+      y2:p[1] + (dx*sa + dy*ca)*5.5,
+      stroke:"var(--hazard)", "stroke-width":"1.4",
+      "stroke-linecap":"round", opacity:"0.9" }));
+  }
+}
+
+const FRACTURE_GAP = 14;       // chart units between the severed ends
+const FRACTURE_OPEN_DAYS = 2;  // the ends pull apart over the first days
+
+function drawBrokenCable(g, c, fault){
+  const total = polyLen(c.pts);
+  // open the gap over the first couple of days, but never from nothing --
+  // the break must read as a break the instant it happens
+  const age = Math.max(0, S.t - fault.t0);
+  const open = 0.4 + 0.6*Math.min(1, age / FRACTURE_OPEN_DAYS);
+  // the Liuqiu and Penghu cables are only ~30 chart units long, so cap the
+  // gap as a share of the run or a short cable vanishes into its own break
+  const gap = Math.min(FRACTURE_GAP, total*0.28) * open;
+  const half = gap / 2 / Math.max(total, 1e-6);
+  const frac = fault.frac ?? 0.5;
+
+  const head = sliceLine(c.pts, 0, frac - half);
+  const tail = sliceLine(c.pts, frac + half, 1);
+  for (const stub of [head, tail]){
+    if (stub.length < 2) continue;
+    g.appendChild(el("path",{
+      d: "M " + stub.map(p => p.join(",")).join(" L "),
+      class:"cable", fill:"none", stroke:"var(--hazard)",
+      "stroke-width":"2.6", "stroke-linecap":"round",
+      filter:"url(#glow)" }));
+  }
+  // fray each severed end, pointing into the gap
+  if (head.length >= 2){
+    const a = head[head.length-2], b = head[head.length-1];
+    frayEnd(g, b, b[0]-a[0], b[1]-a[1]);
+  }
+  if (tail.length >= 2){
+    const a = tail[1], b = tail[0];
+    frayEnd(g, b, b[0]-a[0], b[1]-a[1]);
+  }
+}
+
 function drawCables(){
   const g = $("cables"), h = $("hits");
   g.replaceChildren(); h.replaceChildren();
   for (const c of CABLES){
     const d = "M " + c.pts.map(p => p.join(",")).join(" L ");
-    const broken = S.faults.some(f => f.cableId === c.id && !f.done);
-    const line = el("path",{ d, class:"cable", fill:"none",
-      stroke: broken ? "var(--hazard)" : (c.cls==="domestic" ? "var(--cable)" : "var(--cable-dim)"),
-      "stroke-width": broken ? 2.4 : (c.cls==="domestic" ? 1.9 : 1.3),
-      "stroke-dasharray": broken ? "7 5" : "none",
-      "stroke-linecap":"round" });
-    if (broken) line.setAttribute("filter","url(#glow)");
-    g.appendChild(line);
+    const fault = S.faults.find(f => f.cableId === c.id && !f.done);
+    const broken = !!fault;
+    if (broken){
+      drawBrokenCable(g, c, fault);
+    } else {
+      g.appendChild(el("path",{ d, class:"cable", fill:"none",
+        stroke: c.cls==="domestic" ? "var(--cable)" : "var(--cable-dim)",
+        "stroke-width": c.cls==="domestic" ? 1.9 : 1.3,
+        "stroke-linecap":"round" }));
+    }
 
     const hit = el("path",{ d, class:"cable-hit", fill:"none", tabindex:"0",
       role:"button", "aria-label":`Break ${c.name}` });
