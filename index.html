@@ -78,7 +78,11 @@ svg.map{display:block;width:100%;height:auto;touch-action:manipulation}
 .cable{cursor:pointer;transition:stroke-width .12s ease}
 .cable:focus-visible{outline:none}
 .cable-hit{cursor:pointer;stroke:transparent;stroke-width:16}
-.cable-hit:focus-visible{stroke:var(--brass);stroke-width:3;stroke-dasharray:3 3}
+/* the focus indicator is the dashed brass stroke along the cable itself; the
+   UA's rectangular ring round the path's bounding box has to go, or a clicked
+   cable sits inside a pale box the width of the whole run */
+.cable-hit:focus{outline:none}
+.cable-hit:focus-visible{outline:none;stroke:var(--brass);stroke-width:3;stroke-dasharray:3 3}
 .label{
   font-family:"Barlow Condensed",sans-serif;
   font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
@@ -105,6 +109,17 @@ svg.map{display:block;width:100%;height:auto;touch-action:manipulation}
   font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.14em;
   font-size:10.5px;color:var(--ink-mute);
 }
+
+/* what the glyphs on the chart mean */
+.maplegend{
+  position:absolute;right:14px;bottom:12px;pointer-events:none;
+  display:flex;flex-direction:column;gap:6px;
+  background:rgba(6,20,24,.78);border:1px solid var(--rule);padding:8px 10px;
+  font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;
+  letter-spacing:.12em;font-size:10px;color:var(--ink-mute);
+}
+.maplegend span{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.maplegend svg{flex:0 0 auto;overflow:visible}
 
 /* tooltip */
 .tip{
@@ -239,6 +254,31 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--bra
       </div>
       <div class="zoneflash" id="zoneflash"></div>
       <div class="hint" id="hint">Click a cable to break it</div>
+
+      <div class="maplegend" id="maplegend">
+        <span>
+          <svg width="13" height="13" viewBox="-6.5 -6.5 13 13" aria-hidden="true">
+            <path d="M 0,-5.4 L 4.2,4.4 L 0,2.4 L -4.2,4.4 Z"
+                  fill="var(--brass)" stroke="#061418" stroke-width="0.6"/>
+          </svg>Repair ship
+        </span>
+        <span>
+          <svg width="26" height="13" viewBox="-13 -6.5 26 13" aria-hidden="true">
+            <path d="M -13,1.6 L -5,0" stroke="var(--hazard)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+            <path d="M 5,0 L 13,-1.6" stroke="var(--hazard)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+            <path d="M -5,0 l -3.4,-2.4 M -5,0 l -3.4,2.9" stroke="var(--hazard)" stroke-width="1.2" stroke-linecap="round"/>
+            <path d="M 5,0 l 3.4,-2.9 M 5,0 l 3.4,2.4" stroke="var(--hazard)" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>Broken cable
+        </span>
+        <span>
+          <svg width="13" height="13" viewBox="-6.5 -6.5 13 13" aria-hidden="true">
+            <circle r="3.4" fill="none" stroke="var(--brass)" stroke-width="1.4"/>
+            <line x1="-6.2" y1="0" x2="6.2" y2="0" stroke="var(--brass)" stroke-width="1.2"/>
+            <line x1="0" y1="-6.2" x2="0" y2="6.2" stroke="var(--brass)" stroke-width="1.2"/>
+          </svg>Fault elsewhere in the region
+        </span>
+      </div>
+
       <div class="tip" id="tip"></div>
     </div>
 
@@ -260,8 +300,8 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--bra
         </select>
       </div>
       <div class="ctl">
-        <label>Clock speed <span class="v" id="vSpeed">6 days/sec</span></label>
-        <input type="range" id="speed" min="1" max="40" step="1" value="6">
+        <label>Clock speed <span class="v" id="vSpeed">3 days/sec</span></label>
+        <input type="range" id="speed" min="1" max="40" step="1" value="3">
       </div>
       <div class="ctl" style="align-self:end">
         <label class="switch"><input type="checkbox" id="zone" checked>
@@ -802,6 +842,30 @@ function drawCables(){
   }
 }
 
+/* Days remaining until this cable is back in service.
+   DISPLAY ONLY -- nothing here feeds back into the simulation. It mirrors the
+   expected repair date MODA publishes against each open fault, which their own
+   footnote attributes to cable-ship scheduling rather than to the damage. */
+function estDaysToFix(job){
+  // a hull already assigned: the answer is determined, not estimated
+  const v = S.vessels.find(x => x.job === job);
+  if (v) return Math.max(0, v.left) + (v.state === "transit" ? job.service : 0);
+
+  if (!S.vessels.length) return NaN;
+  const transit = Math.min(...S.vessels.map(x => dist(x, job))) * P.transitPerUnit
+                + P.mobiliseFixed;
+
+  // still queueing: it takes the (k+1)-th hull to come free, where k is how
+  // many jobs sit ahead of it under the current rationing rule
+  const queue = S.faults.filter(f => !f.done && f.tAssign === null).sort(cmp);
+  const k = Math.max(0, queue.indexOf(job));
+  const freeIn = S.vessels.map(x => x.state === "idle" ? 0 : Math.max(0, x.left))
+                          .sort((a,b) => a-b);
+  const rounds = Math.floor(k / freeIn.length);
+  const wait = freeIn[k % freeIn.length] + rounds * (P.serviceMedian + P.mobiliseFixed);
+  return wait + transit + job.service;
+}
+
 function drawDynamic(){
   const fg = $("faults"), vg = $("vessels");
   fg.replaceChildren(); vg.replaceChildren();
@@ -815,10 +879,21 @@ function drawDynamic(){
     fg.appendChild(el("line",{x1:f.x-r-3,y1:f.y,x2:f.x+r+3,y2:f.y,stroke:col,"stroke-width":"1.4"}));
     fg.appendChild(el("line",{x1:f.x,y1:f.y-r-3,x2:f.x,y2:f.y+r+3,stroke:col,"stroke-width":"1.4"}));
     if (f.kind === "fault"){
+      // stacked above and to the right of the break: what it is, how long it
+      // has been open, and when it is expected back. High enough to clear the
+      // crosshair and the cable itself; flipped to the left near the east edge
+      // so the eastbound international systems keep their labels on the chart.
+      const flip = f.x > 760;
+      const tx = flip ? f.x - 12 : f.x + 12;
+      const anchor = flip ? "end" : "start";
       const days = Math.round(S.t - f.t0);
-      const t = el("text",{x:f.x+10,y:f.y-6,class:"label",fill:"#F0A79B"});
-      t.textContent = `${f.label} · ${days}d`;
+      const t = el("text",{x:tx,y:f.y-30,class:"label",fill:"#F0A79B","text-anchor":anchor});
+      t.textContent = `${f.label} · ${days}d open`;
       fg.appendChild(t);
+      const est = estDaysToFix(f);
+      const e = el("text",{x:tx,y:f.y-17,class:"label",fill:"#9FBCBA","text-anchor":anchor});
+      e.textContent = isFinite(est) ? `est. ${Math.ceil(est)} d to fix` : "est. — d to fix";
+      fg.appendChild(e);
     }
   }
 
