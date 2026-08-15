@@ -716,18 +716,23 @@ function frayEnd(g, p, dx, dy){
   }
 }
 
-const FRACTURE_GAP = 14;       // chart units between the severed ends
+/* The gap must clear the fault crosshair drawn over it, whose arms span 16
+   chart units -- a narrower gap is bridged by the marker and the cable reads
+   as unbroken. */
+const FRACTURE_GAP = 30;       // chart units between the severed ends
+const FRACTURE_GAP_MIN = 20;   // width the instant it snaps -- must exceed 16
 const FRACTURE_OPEN_DAYS = 2;  // the ends pull apart over the first days
 
 function drawBrokenCable(g, c, fault){
   const total = polyLen(c.pts);
-  // open the gap over the first couple of days, but never from nothing --
-  // the break must read as a break the instant it happens
+  // the ends pull apart over the first days, but the break opens already
+  // clear of the crosshair -- it must read as a break the instant it happens
   const age = Math.max(0, S.t - fault.t0);
-  const open = 0.4 + 0.6*Math.min(1, age / FRACTURE_OPEN_DAYS);
-  // the Liuqiu and Penghu cables are only ~30 chart units long, so cap the
-  // gap as a share of the run or a short cable vanishes into its own break
-  const gap = Math.min(FRACTURE_GAP, total*0.28) * open;
+  const open = Math.min(1, age / FRACTURE_OPEN_DAYS);
+  // the Liuqiu cables are only ~33 chart units long, so cap the gap as a
+  // share of the run or a short cable vanishes into its own break
+  const gap = Math.min(FRACTURE_GAP_MIN + (FRACTURE_GAP - FRACTURE_GAP_MIN)*open,
+                       total*0.34);
   const half = gap / 2 / Math.max(total, 1e-6);
   const frac = fault.frac ?? 0.5;
 
