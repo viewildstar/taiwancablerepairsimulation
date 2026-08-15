@@ -1,0 +1,8 @@
+numpy>=1.24
+pandas>=2.0
+
+# Estimation stage (not yet implemented -- see "Next" in README.md):
+# lognormal AFT with interval censoring, and the figures that go with it.
+# lifelines>=0.27
+# statsmodels>=0.14
+# matplotlib>=3.7
