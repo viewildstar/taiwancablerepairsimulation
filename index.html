@@ -752,37 +752,48 @@ function drawBrokenCable(g, c, fault){
   }
 }
 
-function drawCables(){
-  const g = $("cables"), h = $("hits");
-  g.replaceChildren(); h.replaceChildren();
+/* The click targets are built ONCE. They must never be rebuilt inside the
+   animation loop: a `click` only fires if mousedown and mouseup resolve to the
+   same element, so replacing these paths every frame silently swallows every
+   click while the clock is running. Cable geometry is static, so building them
+   once is also simply correct. */
+function buildHits(){
+  const h = $("hits");
+  h.replaceChildren();
   for (const c of CABLES){
     const d = "M " + c.pts.map(p => p.join(",")).join(" L ");
-    const fault = S.faults.find(f => f.cableId === c.id && !f.done);
-    const broken = !!fault;
-    if (broken){
-      drawBrokenCable(g, c, fault);
-    } else {
-      g.appendChild(el("path",{ d, class:"cable", fill:"none",
-        stroke: c.cls==="domestic" ? "var(--cable)" : "var(--cable-dim)",
-        "stroke-width": c.cls==="domestic" ? 1.9 : 1.3,
-        "stroke-linecap":"round" }));
-    }
-
     const hit = el("path",{ d, class:"cable-hit", fill:"none", tabindex:"0",
       role:"button", "aria-label":`Break ${c.name}` });
+    // read brokenness at event time -- these listeners outlive any one frame
+    const isBroken = () => S.faults.some(f => f.cableId === c.id && !f.done);
     hit.addEventListener("click", () => { breakCable(c); redraw(); });
     hit.addEventListener("keydown", e => {
       if (e.key === "Enter" || e.key === " "){ e.preventDefault(); breakCable(c); redraw(); }
     });
-    hit.addEventListener("pointerenter", e => showTip(e, c, broken));
-    hit.addEventListener("pointermove",  e => showTip(e, c, broken));
+    hit.addEventListener("pointerenter", e => showTip(e, c, isBroken()));
+    hit.addEventListener("pointermove",  e => showTip(e, c, isBroken()));
     hit.addEventListener("pointerleave", hideTip);
-    hit.addEventListener("focus", () => {
-      const p = pointOn(c.pts, .5);
-      showTipAt(p, c, broken);
-    });
+    hit.addEventListener("focus", () => showTipAt(pointOn(c.pts, .5), c, isBroken()));
     hit.addEventListener("blur", hideTip);
     h.appendChild(hit);
+  }
+}
+
+function drawCables(){
+  const g = $("cables");
+  g.replaceChildren();
+  for (const c of CABLES){
+    const fault = S.faults.find(f => f.cableId === c.id && !f.done);
+    if (fault){
+      drawBrokenCable(g, c, fault);
+    } else {
+      g.appendChild(el("path",{
+        d: "M " + c.pts.map(p => p.join(",")).join(" L "),
+        class:"cable", fill:"none",
+        stroke: c.cls==="domestic" ? "var(--cable)" : "var(--cable-dim)",
+        "stroke-width": c.cls==="domestic" ? 1.9 : 1.3,
+        "stroke-linecap":"round" }));
+    }
   }
 }
 
@@ -902,7 +913,7 @@ function frame(now){
 function reset(){
   S = freshState();
   S.vessels = buildVessels(S.nShips);
-  drawStatic(); renderOrders(); redraw();
+  drawStatic(); buildHits(); renderOrders(); redraw();
   $("hint").textContent = "Click a cable to break it";
 }
 
